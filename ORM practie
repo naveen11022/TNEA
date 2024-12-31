@@ -1,0 +1,138 @@
+from sqlalchemy import create_engine, Column, Integer, String, Float, func
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+
+engine = create_engine("mysql+pymysql://root:mysql123@localhost:3306/tnea")
+Session = sessionmaker(bind=engine)
+session = Session()
+Base = declarative_base()
+
+class CandidateAllotment(Base):
+    __tablename__ = 'candidate_allotment'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    aggr_mark = Column(Float)
+    allotted_category = Column(String(50))
+    community = Column(String(50))
+    branch_code = Column(String(10))
+    college_code = Column(String(10))
+    year = Column(Integer)
+
+class Branch(Base):
+    __tablename__ = 'branch'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    branch_code = Column(String(10), nullable=True)
+    branch_name = Column(String(300), nullable=True)
+
+class Colleges(Base):
+    __tablename__ = 'colleges'
+    s_no = Column(Integer, default=0, nullable=True)
+    collegecode = Column(Integer, primary_key=True)
+    collegename = Column(String(512), nullable=True)
+    LOCATION = Column(String(512), nullable=True)
+    region = Column(String(100), nullable=True)
+
+# sub_query = session.query(
+#     func.count().label("total_st"),
+#     CandidateAllotment.branch_code,
+#     CandidateAllotment.year
+# ).group_by(
+#     CandidateAllotment.branch_code, CandidateAllotment.year
+# ).order_by(
+#     func.count().desc()
+# ).limit(60).subquery()
+#
+# query = session.query(
+#     sub_query.c.total_st,
+#     sub_query.c.branch_code,
+#     sub_query.c.year
+# ).order_by(sub_query.c.year.desc())
+#
+# for record in query.all():
+#     print(f"Total Students: {record.total_st}, Branch Code: {record.branch_code}, Year: {record.year}")
+#
+#
+#                                     AVG_MARK FOR EACH ALLOTTED CATEGORY BASED ON COLLEGE
+#
+# Query = (session.query(func.avg(CandidateAllotment.aggr_mark).label('avg_aggr_mark')
+#                     , CandidateAllotment.allotted_category
+#                     , CandidateAllotment.college_code).filter(CandidateAllotment.year == 2024).
+#                     group_by(
+#                     CandidateAllotment.allotted_category,CandidateAllotment.college_code).
+#                     order_by(CandidateAllotment.college_code))
+# for record in Query:
+#     print(f"Average Mark: {record.avg_aggr_mark}, "
+#           f"Allotted Category: {record.allotted_category}, "
+#           f"College Code: {record.college_code}")
+#
+#                 AVG_MARK FOR EACH COLLEGE
+query = (
+    session.query(
+        func.avg(CandidateAllotment.aggr_mark).label("average_mark"),
+        CandidateAllotment.college_code,
+        Colleges.collegename
+    )
+    .join(Colleges, CandidateAllotment.college_code == Colleges.collegecode).filter(CandidateAllotment.year == 2024)
+    .group_by(CandidateAllotment.college_code, Colleges.collegename)
+)
+
+for record in query.all():
+     print(f"College: {record.collegename}, College Code: {record.college_code}, Average Mark: {record.average_mark:.2f}")
+
+#                -- TOP 10 BRANCH CODE WITH YEAR (2019-2024)--
+#
+# subquery = (
+#     session.query(
+#         func.count().label('total_st'),
+#         CandidateAllotment.branch_code,
+#         CandidateAllotment.year,
+#         func.row_number()
+#         .over(partition_by=CandidateAllotment.year, order_by=func.count().desc())
+#         .label('ranks')
+#     )
+#     .group_by(CandidateAllotment.branch_code, CandidateAllotment.year)
+#     .subquery()
+# )
+#
+# results = (
+#     session.query(subquery.c.total_st, subquery.c.branch_code, subquery.c.year)
+#     .filter(subquery.c.ranks <= 10)
+#     .order_by(subquery.c.year)
+#
+# )
+#
+# for row in results.all():
+#     print(row._mapping)
+#
+#                                                 ---avg mark for each branch_code for each college
+#
+# results = session.query(
+#     func.count().label("students"),
+#     func.avg(CandidateAllotment.aggr_mark).label("avg_mark"),
+#     CandidateAllotment.branch_code,
+#     Branch.branch_name,
+#     CandidateAllotment.college_code,
+#     Colleges.collegename,
+#     CandidateAllotment.allotted_category,
+#     CandidateAllotment.year).join(
+#     Branch, Branch.branch_code == CandidateAllotment.branch_code).join(
+#     Colleges, Colleges.collegecode == CandidateAllotment.college_code).filter(
+#     CandidateAllotment.allotted_category == CandidateAllotment.community,
+#     CandidateAllotment.year == 2024).group_by(
+#     CandidateAllotment.college_code,
+#     CandidateAllotment.branch_code,
+#     Branch.branch_name,
+#     Colleges.collegename,
+#     CandidateAllotment.allotted_category).order_by(
+#     Colleges.collegecode, func.avg(CandidateAllotment.aggr_mark).desc()).limit(3)
+#
+# for row in results:
+#     print(
+#         f"Students: {row.students}, "
+#         f"Average Mark: {row.avg_mark:.2f}, "
+#         f"Branch Code: {row.branch_code}, "
+#         f"Branch Name: {row.branch_name}, "
+#         f"College Code: {row.college_code}, "
+#         f"College Name: {row.collegename}, "
+#         f"Allotted Category: {row.allotted_category}, "
+#         f"Year: {row.year}"
+#     )
